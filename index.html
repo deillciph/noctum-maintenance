@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#07090d">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+        content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 
   <style>
     :root{
@@ -390,7 +390,7 @@
       width:170px;
       opacity:1;
       border-color:rgba(215,166,82,.18);
-      padding:0 .85rem;
+      padding:0 .9rem;
       pointer-events:auto;
     }
 
@@ -402,7 +402,7 @@
     }
 
     .volume-slider{
-      width:112px;
+      width:138px;
       height:3px;
       appearance:none;
       -webkit-appearance:none;
@@ -439,17 +439,6 @@
       box-shadow:0 0 0 3px rgba(215,166,82,.08);
     }
 
-    .youtube-audio{
-      position:fixed;
-      width:1px;
-      height:1px;
-      left:-9999px;
-      top:-9999px;
-      opacity:.001;
-      pointer-events:none;
-      overflow:hidden;
-    }
-
     @media(max-width:720px){
       body{overflow:auto}
       main{padding:.45rem}
@@ -464,6 +453,43 @@
       .rose{right:10px;bottom:10px;width:86px;height:86px}
     }
 
+    @media(max-width:480px){
+      .music-control{
+        top:12px;
+        left:12px;
+        gap:.4rem;
+      }
+
+      .music-button{
+        width:40px;
+        height:40px;
+      }
+
+      .volume-popover{
+        height:40px;
+      }
+
+      .volume-popover.open{
+        width:min(150px,calc(100vw - 68px));
+        padding:0 .75rem;
+      }
+
+      .volume-slider{
+        width:100%;
+        min-width:0;
+      }
+
+      .volume-slider::-webkit-slider-thumb{
+        width:15px;
+        height:15px;
+      }
+
+      .volume-slider::-moz-range-thumb{
+        width:15px;
+        height:15px;
+      }
+    }
+
     @media(prefers-reduced-motion:reduce){
       *,*::before,*::after{
         animation-duration:.001ms!important;
@@ -475,6 +501,33 @@
 </head>
 
 <body>
+  <div class="music-control" aria-label="Controles de ambientación">
+    <button
+      class="music-button"
+      id="musicButton"
+      type="button"
+      aria-label="Activar ambientación"
+      aria-pressed="false"
+      title="Ambientación"
+    >
+      <span class="music-note" aria-hidden="true">♪</span>
+    </button>
+
+    <div class="volume-popover" id="volumePopover">
+      <input
+        class="volume-slider"
+        id="volumeSlider"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value="38"
+        aria-label="Volumen de ambientación"
+      >
+    </div>
+
+    <audio id="ambientAudio" loop preload="auto"><source src="ambientacion.mp3" type="audio/mpeg"></audio>
+  </div>
 <div class="petals petals-back" id="petalsBack" aria-hidden="true"></div>
   <div class="petals petals-front" id="petalsFront" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
@@ -514,80 +567,55 @@
   </main>
 <script>
   (() => {
-    const VIDEO_ID = 'HTKb2WbjXY0';
-
     const button = document.getElementById('musicButton');
     const popover = document.getElementById('volumePopover');
-    const videoPopover = document.getElementById('youtubePopover');
     const slider = document.getElementById('volumeSlider');
+    const audio = document.getElementById('ambientAudio');
 
-    let player = null;
-    let playerReady = false;
-    let wantsPlayback = false;
-
-    slider.style.setProperty('--volume', `${slider.value}%`);
-
-    window.onYouTubeIframeAPIReady = () => {
-      player = new YT.Player('youtubePlayer', {
-        width: '356',
-        height: '200',
-        videoId: VIDEO_ID,
-        playerVars: {
-          autoplay: 0,
-          controls: 1,
-          rel: 0,
-          playsinline: 1,
-          loop: 1,
-          playlist: VIDEO_ID
-        },
-        events: {
-          onReady: () => {
-            playerReady = true;
-            player.setVolume(Number(slider.value));
-
-            if (wantsPlayback) {
-              player.playVideo();
-            }
-          },
-          onStateChange: (event) => {
-            if (event.data === YT.PlayerState.PLAYING) {
-              button.classList.add('active');
-              button.setAttribute('aria-pressed', 'true');
-            }
-          }
-        }
-      });
+    const setVolume = () => {
+      const value = Number(slider.value);
+      audio.volume = value / 100;
+      slider.style.setProperty('--volume', `${value}%`);
     };
 
-    button.addEventListener('click', () => {
-      wantsPlayback = !wantsPlayback;
-
-      popover.classList.toggle('open', wantsPlayback);
-      videoPopover.classList.toggle('open', wantsPlayback);
-      videoPopover.setAttribute('aria-hidden', String(!wantsPlayback));
-
-      button.classList.toggle('active', wantsPlayback);
-      button.setAttribute('aria-pressed', String(wantsPlayback));
+    const setPlaying = (playing) => {
+      button.classList.toggle('active', playing);
+      button.setAttribute('aria-pressed', String(playing));
       button.setAttribute(
         'aria-label',
-        wantsPlayback ? 'Desactivar ambientación' : 'Activar ambientación'
+        playing ? 'Pausar ambientación' : 'Activar ambientación'
       );
+    };
 
-      if (!playerReady || !player) return;
+    setVolume();
+    audio.load();
 
-      if (wantsPlayback) {
-        player.setVolume(Number(slider.value));
-        player.playVideo();
-      } else {
-        player.pauseVideo();
+    button.addEventListener('click', async () => {
+      const opening = !popover.classList.contains('open');
+      popover.classList.toggle('open', opening);
+
+      if (!opening) {
+        audio.pause();
+        setPlaying(false);
+        return;
+      }
+
+      try {
+        await audio.play();
+        setPlaying(true);
+      } catch (error) {
+        setPlaying(false);
+        console.error('No se pudo reproducir ambientacion.mp3:', error);
       }
     });
 
-    slider.addEventListener('input', () => {
-      slider.style.setProperty('--volume', `${slider.value}%`);
-      if (playerReady && player) {
-        player.setVolume(Number(slider.value));
-      }
+    slider.addEventListener('input', setVolume);
+
+    audio.addEventListener('play', () => setPlaying(true));
+    audio.addEventListener('pause', () => setPlaying(false));
+    audio.addEventListener('error', () => {
+      setPlaying(false);
+      console.error('No se encontró o no se pudo cargar ambientacion.mp3');
     });
   })();
   </script>
